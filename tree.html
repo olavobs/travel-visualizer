@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tree Visualization</title>
+    <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.min.js"></script>
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+    <script src="https://d3js.org/d3.v5.min.js"></script>
+    <script
+        src="https://cdnjs.cloudflare.com/ajax/libs/jquery-datetimepicker/2.5.20/jquery.datetimepicker.full.min.js"></script>
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/jquery-datetimepicker/2.5.20/jquery.datetimepicker.min.css">
+    <style>
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        .node circle.highlighted {
+            fill: yellow;
+            stroke: #000;
+            stroke-width: 2px;
+            cursor: pointer;
+        }
+
+        .link {
+            fill: none;
+            stroke: #ccc;
+            stroke-width: 2px;
+        }
+
+        .link.highlighted-link {
+            stroke: yellow;
+            stroke-width: 2px;
+        }
+
+        .node circle {
+            fill: #add8e6;
+            stroke: #000;
+            stroke-width: 2px;
+            cursor: pointer;
+        }
+
+        .node text {
+            font: 13px 'verdana', Courier, monospace;
+            fill: #fff;
+        }
+
+        .tooltip {
+            position: absolute;
+            text-align: left;
+            padding: 10px;
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #fff;
+            border-radius: 5px;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        .modal {
+            display: none;
+            top: 50%;
+            overflow-y: auto;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 5px;
+            text-align: left;
+            font: 1em sans-serif;
+        }
+
+        .modal label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .modal input {
+            margin-bottom: 10px;
+        }
+
+        .modal button {
+            cursor: pointer;
+            margin-top: 10px;
+            margin-right: 10px;
+        }
+
+        #destinationText {
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        #closeButton {
+            position: absolute;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <svg width="960" height="600"></svg>
+    <div class="tooltip"></div>
+    <div class="modal">
+        <div id="destinationText"></div>
+        <form id="nodeForm">
+            <label for="newCity">Destino:</label>
+            <input type="text" id="newCity" required>
+            <label for="newPrice">Preço:</label>
+            <input type="text" id="newPrice" required>
+            <label for="startMoment">Partida:</label>
+            <input type="text" id="startMoment">
+            <label for="endMoment">Chegada:</label>
+            <input type="text" id="endMoment">
+            <label for="currency">Moeda:</label>
+            <input type="text" id="currency" required>
+            <label for="departurePlace">Local de partida:</label>
+            <input type="text" id="departurePlace">
+            <label for="arrivalPlace">Local de chegada:</label>
+            <input type="text" id="arrivalPlace">
+            <label for="transportCompanyName">Empresa:</label>
+            <input type="text" id="transportCompanyName">
+            <label for="transportType">Tipo de transporte:</label>
+            <select id="transportType">
+                <option value="aviao">Avião</option>
+                <option value="trem">Trem</option>
+                <option value="onibus">Ônibus</option>
+            </select>
+            <br>
+            <button type="button" class="btn btn-secondary" onclick="addNewNode()">Create</button>
+            <button type="button" class="btn btn-danger" id="closeButton">Cancel</button>
+        </form>
+    </div>
+
+    <script>
+        async function fetchData() {
+            try {
+                const response = await fetch('http://localhost:8080/v1/nodes');
+                return await response.json();
+            } catch (error) {
+                console.error('Erro ao obter os dados:', error);
+            }
+        }
+
+        function closeModal() {
+            d3.select(".modal").style("display", "none");
+        }
+
+        function showPopup(d) {
+            const destinationText = `Adicionar novo destino saindo de ${d.data.currentCity}`;
+            d3.select("#destinationText").text(destinationText);
+            d3.select(".modal").style("display", "block");
+            d3.select("#newCity").property("value", "");
+            d3.select("#newPrice").property("value", "");
+            d3.select("#startMoment").property("value", "");
+            d3.select("#endMoment").property("value", "");
+            d3.select("#currency").property("value", "");
+            d3.select("#departurePlace").property("value", "");
+            d3.select("#arrivalPlace").property("value", "");
+            d3.select("#transportType").property("value", "");
+            d3.select("#transportCompanyName").property("value", "");
+            d3.select(".modal").attr("data-edit-mode", "false");
+            d3.select(".modal").datum({ previousCity: d.data.id });
+            d3.select(".modal").datum(d);
+        }
+
+        function editNode() {
+            const isEditMode = d3.select(".modal").attr("data-edit-mode") === "true";
+            if (isEditMode) {
+                const nodeId = d3.select(".modal").datum().data.id;
+            } else {
+                addNewNode();
+            }
+        }
+
+        function addNewNode() {
+            const previousCity = d3.select(".modal").datum().data.id;
+            const newNodeCity = d3.select("#newCity").property("value") || null;
+            const newPrice = parseFloat(d3.select("#newPrice").property("value"));
+            const newStartMoment = parseDate(d3.select("#startMoment").property("value"));
+            const newEndMoment = parseDate(d3.select("#endMoment").property("value"));
+            const currency = d3.select("#currency").property("value") || null;
+            const departurePlace = d3.select("#departurePlace").property("value") || null;
+            const arrivalPlace = d3.select("#arrivalPlace").property("value") || null;
+            const transportType = d3.select("#transportType").property("value") || null;
+            const transportCompanyName = d3.select("#transportCompanyName").property("value") || null;
+
+            if (isNaN(newPrice) || !isFinite(newPrice)) {
+                alert("O preço deve ser um número válido.");
+                return;
+            }
+
+            const newNode = {
+                previousCity: previousCity,
+                currentCity: newNodeCity,
+                price: newPrice,
+                startMoment: newStartMoment,
+                endMoment: newEndMoment,
+                currency: currency,
+                departurePlace: departurePlace,
+                arrivalPlace: arrivalPlace,
+                transportType: transportType,
+                transportCompanyName: transportCompanyName
+            };
+
+            fetch('http://localhost:8080/v1/nodes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(newNode),
+            })
+                .then(response => {
+                    if (response.ok) {
+                        renderChart();
+                        window.location.reload();
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro ao adicionar o nó:', error);
+                });
+
+            d3.select(".modal").style("display", "none");
+        }
+
+        async function renderChart() {
+            const treeData = await fetchData();
+
+            const margin = { top: 20, right: 120, bottom: 20, left: 120 };
+            const width = 960 - margin.right - margin.left;
+            const height = 600 - margin.top - margin.bottom;
+
+            const svg = d3.select("svg")
+                .attr("width", width + margin.right + margin.left)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            const root = d3.stratify()
+                .id(d => d.currentCity)
+                .parentId(d => d.previousCity)(treeData);
+
+            const tree = d3.tree().size([width, height]);
+
+            tree(root);
+
+            const link = svg.selectAll(".link")
+                .data(root.links())
+                .enter().append("path")
+                .attr("class", "link")
+                .attr("data-id", d => d.target.data.id)
+                .attr("d", d3.linkVertical()
+                    .x(d => d.x)
+                    .y(d => d.y)
+                );
+
+            const tooltip = d3.select(".tooltip");
+
+            const nodes = svg.selectAll(".node")
+                .data(root.descendants())
+                .enter().append("g")
+                .attr("class", "node")
+                .attr("transform", d => `translate(${d.x},${d.y})`)
+                .on("mouseover", d => {
+                    tooltip.transition()
+                        .duration(200)
+                        .style("opacity", .9);
+
+                    const tooltipHtml = Object.entries(d.data)
+                        .filter(([key, value]) => key !== "id" && value !== null)
+                        .map(([key, value]) => `${key}: ${value}`)
+                        .join("<br>");
+
+                    tooltip.html(tooltipHtml)
+                        .style("left", (d3.event.pageX + 5) + "px")
+                        .style("top", (d3.event.pageY - 28) + "px");
+
+                    highlightPathOnHover(d, true);
+                })
+                .on("mouseout", d => {
+                    tooltip.transition()
+                        .duration(500)
+                        .style("opacity", 0);
+
+                    highlightPathOnHover(d, false);
+                })
+                .on("click", d => {
+                    showPopup(d);
+                });
+
+            nodes.append("circle")
+                .attr("class", "node")
+                .attr("r", 7)
+                .attr("data-id", d => d.data.id);
+
+            nodes.append("text")
+                .attr("class", "node")
+                .attr("dy", 3)
+                .attr("x", d => d.children ? -8 : 8)
+                .style("text-anchor", d => d.children ? "end" : "start")
+                .text(d => {
+                    return d.data.currentCity + " " + (d.data.startMoment ? formatDate(new Date(d.data.startMoment)) : "");
+                })
+                .style("fill", "#fff")
+                .attr("data-id", d => d.data.id);
+
+            $("#startMoment").datetimepicker({
+                dateFormat: 'yy-mm-dd',
+                timeFormat: 'HH:mm:ss',
+                showSecond: true
+            });
+
+            $("#endMoment").datetimepicker({
+                dateFormat: 'yy-mm-dd',
+                timeFormat: 'HH:mm:ss',
+                showSecond: true
+            });
+        }
+
+        function formatDate(date) {
+            const timeZone = 'America/Sao_Paulo';
+
+            // Opções para a formatação da data
+            const options = {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: 'numeric',
+                second: 'numeric',
+                timeZone: timeZone,
+                timeZoneName: 'short'
+            };
+
+            // Crie uma instância de Intl.DateTimeFormat com as opções especificadas
+            const dateTimeFormat = new Intl.DateTimeFormat('pt-BR', options);
+
+            // Formate a data para a string no fuso horário desejado
+            const formattedDateStr = dateTimeFormat.format(date);
+
+            // Crie uma nova instância de Date diretamente do objeto de data original
+            const formattedDate = new Date(date);
+
+            const monthNames = [
+                "Janeiro", "Fevereiro", "Março",
+                "Abril", "Maio", "Junho", "Julho",
+                "Agosto", "Setembro", "Outubro",
+                "Novembro", "Dezembro"
+            ];
+            const month = monthNames[formattedDate.getMonth()];
+            return `(${formattedDate.getDate()} de ${month})`;
+        }
+       
+        function highlightPathOnHover(d, isHovered) {
+            d3.select(`.node[data-id="${d.data.id}"]`).classed("highlighted", isHovered);
+
+            while (d) {
+                d3.select(`.link[data-id="${d.data.id}"]`).classed("highlighted-link", isHovered);
+                d = d.parent;
+            }
+        }
+
+        function parseDate(dateString) {
+            const parsedDate = new Date(dateString);
+            return !isNaN(parsedDate) ? parsedDate : null;
+        }
+        renderChart();
+        document.getElementById("closeButton").addEventListener("click", closeModal);
+    </script>
+</body>
+
+</html>
