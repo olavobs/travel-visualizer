@@ -24,7 +24,7 @@ async function authRequest(url, body) {
       signal: controller.signal,
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.message ?? data.error ?? `Request failed: ${res.status}`);
+    if (!res.ok) throw new Error(data.message || data.detail || data.error || `Request failed: ${res.status}`);
     return data;
   } catch (e) {
     if (e.name === 'AbortError') throw new Error('Request timed out');

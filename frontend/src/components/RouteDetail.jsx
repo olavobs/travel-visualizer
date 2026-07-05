@@ -83,7 +83,7 @@ function PriceChart({ history, t }) {
   );
 }
 
-function SegmentSection({ routeId, segment, onDeleted, onPurchased }) {
+export function SegmentSection({ routeId, segment, onDeleted, onPurchased, onPurchasedChange, blockedByPurchase }) {
   const t = useT();
   const [history, setHistory]           = useState([]);
   const [open, setOpen]                 = useState(true);
@@ -101,11 +101,13 @@ function SegmentSection({ routeId, segment, onDeleted, onPurchased }) {
   const loadHistory = useCallback(async () => {
     try {
       setError(null);
-      setHistory(await getPriceHistory(routeId, segment.id));
+      const h = await getPriceHistory(routeId, segment.id);
+      setHistory(h);
+      onPurchasedChange?.(segment.id, h.some(r => r.purchased));
     } catch (e) {
       setError(e.message);
     }
-  }, [routeId, segment.id]);
+  }, [routeId, segment.id, onPurchasedChange]);
 
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
@@ -155,8 +157,11 @@ function SegmentSection({ routeId, segment, onDeleted, onPurchased }) {
     setTogglingId(priceId);
     try {
       await togglePricePurchased(routeId, segment.id, priceId);
-      await loadHistory();
-      if (!wasPurchased) onPurchased?.();
+      const h = await getPriceHistory(routeId, segment.id);
+      setHistory(h);
+      const nowHasPurchased = h.some(r => r.purchased);
+      onPurchasedChange?.(segment.id, nowHasPurchased);
+      if (!wasPurchased && nowHasPurchased) onPurchased?.();
     } catch (e) {
       setError(e.message);
     } finally {
@@ -289,8 +294,8 @@ function SegmentSection({ routeId, segment, onDeleted, onPurchased }) {
                           <button
                             className={`btn btn-purchase btn-sm${record.purchased ? ' btn-purchase--active' : ''}`}
                             onClick={() => handleTogglePurchased(record.id, record.purchased)}
-                            disabled={togglingId === record.id}
-                            title={record.purchased ? t('routeDetail.unmarkTitle') : undefined}
+                            disabled={togglingId === record.id || (blockedByPurchase && !record.purchased)}
+                            title={record.purchased ? t('routeDetail.unmarkTitle') : blockedByPurchase ? t('routeDetail.purchasedBlockedTitle') : undefined}
                           >
                             {togglingId === record.id ? '…' : record.purchased ? t('routeDetail.purchasedBadge') : t('routeDetail.bought')}
                           </button>
@@ -324,6 +329,7 @@ export default function RouteDetail({ route, onBack, onRouteChange }) {
   const [currentStatus, setCurrentStatus] = useState(route.status ?? 'WATCHING');
   const [changingStatus, setChangingStatus] = useState(false);
   const [segments, setSegments]           = useState([]);
+  const [purchasedSegmentId, setPurchasedSegmentId] = useState(null);
   const [showAddSegment, setShowAddSegment] = useState(false);
   const [newType, setNewType]             = useState('FLIGHT');
   const [newLabel, setNewLabel]           = useState('');
@@ -360,6 +366,14 @@ export default function RouteDetail({ route, onBack, onRouteChange }) {
       setChangingStatus(false);
     }
   };
+
+  const handlePurchasedChange = useCallback((segId, hasPurchased) => {
+    setPurchasedSegmentId(prev => {
+      if (hasPurchased) return segId;
+      if (prev === segId) return null;
+      return prev;
+    });
+  }, []);
 
   const handlePurchased = useCallback(() => {
     if (currentStatus !== 'BOOKED') {
@@ -452,6 +466,8 @@ export default function RouteDetail({ route, onBack, onRouteChange }) {
             segment={seg}
             onDeleted={handleSegmentDeleted}
             onPurchased={handlePurchased}
+            onPurchasedChange={handlePurchasedChange}
+            blockedByPurchase={purchasedSegmentId !== null && purchasedSegmentId !== seg.id}
           />
         ))
       )}

@@ -2,6 +2,28 @@ import { useState } from 'react';
 import { login, register } from '../api/authApi';
 import { useT, useLang } from '../i18n/LanguageContext';
 
+export function friendlyError(raw, mode, t) {
+  const msg = (raw ?? '').toLowerCase();
+
+  if (msg.includes('timed out') || msg.includes('network error') || msg.includes('failed to fetch'))
+    return t('auth.errConnection');
+  if (msg.includes('invalid credentials') || msg.includes('unauthorized') || msg.includes(': 401'))
+    return t('auth.errInvalidCredentials');
+  if (msg.includes('already') || msg.includes('conflict') || msg.includes(': 409'))
+    return t('auth.errEmailTaken');
+  if (msg.includes('password') && (msg.includes('8') || msg.includes('least')))
+    return t('auth.errPasswordTooShort');
+  if (msg.includes(': 403'))
+    return t('auth.errServer');
+  if (msg.includes(': 502') || msg.includes(': 503') || msg.includes('networkerror'))
+    return t('auth.errUnreachable');
+  if (msg.includes(': 5'))
+    return t('auth.errServer');
+  if (mode === 'login')
+    return t('auth.errInvalidCredentials');
+  return raw;
+}
+
 export default function AuthForm({ onAuthenticated }) {
   const t = useT();
   const { lang, switchLang } = useLang();
@@ -23,7 +45,7 @@ export default function AuthForm({ onAuthenticated }) {
       }
       onAuthenticated();
     } catch (err) {
-      setError(err.message);
+      setError(friendlyError(err.message, mode, t));
     } finally {
       setLoading(false);
     }
@@ -56,7 +78,18 @@ export default function AuthForm({ onAuthenticated }) {
         </div>
 
         <form onSubmit={handleSubmit} className="auth-form">
-          {error && <p className="auth-error">{error}</p>}
+          {error && (
+            <div className="auth-error" role="alert">
+              <span className="auth-error__icon">⚠</span>
+              <span className="auth-error__text">{error}</span>
+              <button
+                type="button"
+                className="auth-error__dismiss"
+                aria-label="Dismiss"
+                onClick={() => setError(null)}
+              >×</button>
+            </div>
+          )}
 
           <label className="auth-label">
             {t('auth.email')}
