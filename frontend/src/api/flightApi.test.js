@@ -29,18 +29,18 @@ describe('getRoutes', () => {
     global.fetch = mockFetch(404, { error: 'Not found' });
 
     const promise = getRoutes();
+    const assertion = expect(promise).rejects.toThrow('Not found');
     await vi.runAllTimersAsync();
-
-    await expect(promise).rejects.toThrow('Not found');
+    await assertion;
   });
 
   it('throws generic message when error body has no message', async () => {
     global.fetch = mockFetch(500, {});
 
     const promise = getRoutes();
+    const assertion = expect(promise).rejects.toThrow('Request failed: 500');
     await vi.runAllTimersAsync();
-
-    await expect(promise).rejects.toThrow('Request failed: 500');
+    await assertion;
   });
 });
 
