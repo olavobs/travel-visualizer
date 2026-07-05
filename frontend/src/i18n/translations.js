@@ -1,14 +1,14 @@
 const translations = {
   en: {
     app: {
-      title: 'Travel Price Monitor',
+      title: 'TripTrack',
       newRoute: '+ New Route',
       logout: 'Log out',
       routes: 'Routes',
       journeyTree: 'Journey Tree',
     },
     auth: {
-      title: '✈ Travel Price Monitor',
+      title: '✈ TripTrack',
       login: 'Log in',
       register: 'Register',
       email: 'Email',
@@ -84,14 +84,14 @@ const translations = {
 
   pt: {
     app: {
-      title: 'Monitor de Preços de Viagem',
+      title: 'TripTrack',
       newRoute: '+ Nova Rota',
       logout: 'Sair',
       routes: 'Rotas',
       journeyTree: 'Árvore de Viagem',
     },
     auth: {
-      title: '✈ Monitor de Preços de Viagem',
+      title: '✈ TripTrack',
       login: 'Entrar',
       register: 'Cadastrar',
       email: 'E-mail',
