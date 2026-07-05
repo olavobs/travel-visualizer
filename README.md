@@ -1,6 +1,21 @@
-# Travel Price Monitor
+# TripTrack
 
-A multi-user web application for planning and monitoring travel prices across different transport types (flights, buses, cars, boats), built with Clean Architecture.
+A multi-user web application for planning and monitoring travel prices across different transport types (flights, buses, cars, boats). Built with Clean Architecture on Spring Boot + React.
+
+---
+
+## What it does
+
+- Create **Routes** (A → B, on a travel date) and track how prices evolve over time
+- Add multiple **Segments** per route — one per transport mode (flight, bus, car, boat, or custom)
+- Log **Price observations** manually whenever you check a fare; the app stores the history
+- **Mark a price as purchased** — the app records which fare you actually bought and auto-sets the route to Booked
+- **Journey tree** — visualises all your routes as a tree; click any destination node to see the total trip cost
+- **Price trend chart** — line chart per segment showing how prices changed over time
+- **Route status** — WATCHING → BOOKED → CANCELLED lifecycle
+- Available in **English and Portuguese** (language toggle, persists in localStorage)
+
+---
 
 ## Data model
 
@@ -11,16 +26,35 @@ Dec 2026            BUS                     R$150,  2026-04-11
                     CAR (Rent in Lisbon)     …
 ```
 
-A **Route** represents an A → B trip on a specific travel date. Each route can have multiple **Segments** — one per transport mode. Each segment has its own **price history**, letting you compare the total cost of different transport combinations.
+A **Route** is an A → B trip on a specific date. Each route has multiple **Segments** (one per transport leg). Each segment has its own **price history** so you can compare the total cost of different transport combinations.
 
-Transport types: `FLIGHT | BUS | CAR | BOAT | OTHER` — `OTHER` (and any type) also accepts a free-text `label`.
+Transport types: `FLIGHT | BUS | CAR | BOAT | OTHER`  
+`OTHER` (and any type) accepts a free-text `label`.
+
+---
+
+## Tech stack
+
+| Layer | Technology |
+|-------|-----------|
+| Backend | Java 21, Spring Boot 3.2, Spring Security, Spring JDBC |
+| Database | MySQL 8.0 with Flyway migrations |
+| Cache | Redis 7 |
+| Auth | JWT (HS256, 7-day expiry, stateless) |
+| API docs | SpringDoc OpenAPI (Swagger UI) |
+| Frontend | React 18, Vite 5 |
+| Charts | Recharts |
+| Containerisation | Docker, Docker Compose |
+| Testing | JUnit 5, Mockito, Vitest, React Testing Library |
+
+---
 
 ## Architecture
 
 ```
 com.flightmonitor
 ├── domain/                    ← Pure business rules, no framework dependencies
-│   ├── model/                 ← Route, Segment, TransportType, PriceRecord, User, Money, Currency
+│   ├── model/                 ← Route, Segment, TransportType, PriceRecord, User, Money, Currency, RouteStatus
 │   ├── repository/            ← RouteRepository, SegmentRepository, PriceRecordRepository, UserRepository (interfaces)
 │   ├── port/                  ← PriceCachePort (interface)
 │   └── exception/             ← RouteNotFoundException, PriceRecordNotFoundException
@@ -36,30 +70,58 @@ com.flightmonitor
         └── dto/               ← HTTP request/response records
 ```
 
-### Authentication
+---
 
-The app uses stateless JWT authentication (HS256, 7-day expiry). Each request must carry an `Authorization: Bearer <token>` header. The security boundary is the controller layer only — use cases receive a plain `Long userId` parameter extracted from the token, keeping the application layer free of Spring Security dependencies.
-
-- `POST /api/auth/register` — creates an account, returns a JWT
-- `POST /api/auth/login` — validates credentials, returns a JWT
-- All `/api/routes/**` endpoints require a valid JWT
-
-### Multi-tenancy
-
-Every route and price record is owned by a user. All queries are scoped to the authenticated user — `existsByIdAndUserId` prevents one user from reading or modifying another's data (IDOR protection at the DB level).
+## Key design decisions
 
 ### Why no ORM?
 
-The project uses raw `JdbcTemplate` instead of JPA/Hibernate intentionally. The domain models are plain Java objects with hand-written constructors that enforce business invariants (positive price, non-null fields, etc.). An ORM would require no-arg constructors and mutable state, which would weaken those guarantees. SQL is explicit, queries are readable, and there is no N+1 surprise.
+Raw `JdbcTemplate` is used instead of JPA/Hibernate. The domain models are plain Java objects with hand-written constructors that enforce business invariants (positive price, non-null fields, etc.). An ORM would require no-arg constructors and mutable state, weakening those guarantees. SQL is explicit, queries are readable, and there are no N+1 surprises.
+
+### Authentication boundary
+
+The security boundary is the controller layer only. Use cases receive a plain `Long userId` extracted from the JWT — they know nothing about Spring Security. This keeps the application layer testable without a security context.
+
+- `POST /api/auth/register` — creates an account, returns a JWT
+- `POST /api/auth/login` — validates credentials, returns a JWT
+- All `/api/routes/**` endpoints require `Authorization: Bearer <token>`
+
+### Multi-tenancy (IDOR protection)
+
+Every resource is owned by a user. All queries are scoped with `userId` — `existsByIdAndUserId` is used before any mutation, preventing one user from reading or modifying another's data at the database level.
 
 ### Caching strategy
 
-`GetRoutePriceSummaryUseCase` uses a read-through cache (Redis, 24h TTL) **per segment**:
+`GetRoutePriceSummaryUseCase` uses a read-through Redis cache (24h TTL) **keyed by segmentId**:
 
-1. For each segment, check Redis (`key = segmentId`) → return if hit
-2. Query DB for that segment → store in Redis → return
+1. Check Redis → return on hit
+2. Query DB → store in Redis → return
 
-`AddPriceRecordUseCase`, `UpdatePriceRecordUseCase`, and `DeletePriceRecordUseCase` evict the cache entry for the affected segment after every write. `DeleteSegmentUseCase` and `DeleteRouteUseCase` also evict all relevant segment cache entries before deleting.
+All write use cases (add/update/delete price, mark as purchased) evict the affected segment's cache entry. Delete cascade (route or segment delete) evicts all relevant entries before deletion.
+
+### Route status lifecycle
+
+Routes go through three statuses: `WATCHING → BOOKED → CANCELLED`. Status is changed manually from the route detail screen, or automatically set to `BOOKED` when a price record is marked as purchased.
+
+### Purchased price
+
+Each segment can have at most one price record flagged as purchased at a time. The `markAsPurchased` toggle:
+- If not purchased → clears all purchased flags on the segment, marks this one, sets route to BOOKED
+- If already purchased → clears the flag (undo)
+
+The journey tree uses `purchasedPrice ?? lowestPrice` as the representative cost per segment.
+
+### Database migrations
+
+Five Flyway migrations in order:
+
+| Version | Change |
+|---------|--------|
+| V1 | Initial schema: users, flight_routes, price_records |
+| V2 | Add `booked` boolean to routes |
+| V3 | Rename to travel_routes, add travel_segments, migrate price_records to segment-based |
+| V4 | Replace `booked` boolean with `status` enum (WATCHING/BOOKED/CANCELLED) |
+| V5 | Add `purchased` boolean to price_records |
 
 ---
 
@@ -69,16 +131,11 @@ The project uses raw `JdbcTemplate` instead of JPA/Hibernate intentionally. The 
 |------|---------|---------|
 | Java | 21+ | Backend |
 | Maven | 3.9+ | Backend build |
-| Docker & Docker Compose | any recent | Full stack / infra |
+| Docker & Docker Compose | any recent | Full stack / infrastructure |
 | Node.js | **18+** | Frontend dev server & tests |
 
-> **Node 18 is required.** Vite 5 (used by the frontend) explicitly requires Node ≥ 18. Node 16 will fail to start the dev server and the test runner.
->
-> If you are on an older version, upgrade via nvm:
-> ```bash
-> nvm install 18
-> nvm use 18
-> ```
+> **Node 18 is required.** Vite 5 requires Node ≥ 18. Node 16 will fail.
+> Upgrade via nvm: `nvm install 18 && nvm use 18`
 
 ---
 
@@ -88,162 +145,117 @@ The project uses raw `JdbcTemplate` instead of JPA/Hibernate intentionally. The 
 |----------|----------|---------|-------------|
 | `JWT_SECRET` | Recommended in prod | `change-this-secret-to-32-or-more-chars!!` | HS256 signing key — must be ≥ 32 characters |
 
-In production, always set `JWT_SECRET` to a strong random value:
+Generate a strong secret for production:
 ```bash
 openssl rand -base64 48
 ```
 
-Pass it via Docker Compose or as an OS environment variable before starting the app. The default is intentionally weak and should never be used in production.
-
 ---
 
-## Running the full stack in Docker
+## Running with Docker (full stack)
 
-**First run or after schema changes — wipe the database volume first:**
+**First run or after schema changes — wipe the DB volume first:**
 
 ```bash
 docker compose down -v && docker compose up --build
 ```
 
-The `-v` flag removes the MySQL data volume so Flyway applies the migration from scratch.
-
-For subsequent runs (no schema changes):
+Subsequent runs (no schema changes):
 
 ```bash
 docker compose up --build
 ```
 
-This builds both images and starts all four services: MySQL, Redis, the Spring Boot backend, and the Nginx frontend.
-
-| Service  | URL                                   |
-|----------|---------------------------------------|
-| Frontend | http://localhost:3000                 |
-| Backend  | http://localhost:8080/api             |
+| Service  | URL |
+|----------|-----|
+| Frontend | http://localhost:3000 |
+| Backend  | http://localhost:8080/api |
 | Swagger  | http://localhost:8080/swagger-ui.html |
 
-The frontend container talks to the backend through Docker's internal network
-(Nginx proxies `/api/` to `http://app:8080`), so port 8080 does not need to be
-open to the browser — only port 3000 does.
+The frontend Nginx container proxies `/api/` to the backend over Docker's internal network — port 8080 does not need to be open in the browser.
 
-To stop and remove containers:
+Stop and remove containers:
 
 ```bash
-docker compose down
-
-# Also remove persistent volumes (wipes database):
-docker compose down -v
+docker compose down        # keep volumes
+docker compose down -v     # also wipe database
 ```
 
 ---
 
-## Recommended development workflow (fast iteration)
+## Development workflow (fast iteration)
 
-Run only the infrastructure in Docker and everything else locally. This gives you automatic backend restarts on recompile and instant frontend hot-module replacement — no image rebuilds needed.
+Run only the infrastructure in Docker, everything else locally. This gives hot-module replacement on the frontend and fast backend restarts without rebuilding images.
 
 ```bash
-# Terminal 1 — infrastructure only (run once, leave it up)
+# Terminal 1 — infrastructure only (run once)
 docker compose up -d mysql redis
 
-# Terminal 2 — backend with auto-restart on recompile
+# Terminal 2 — backend
 mvn spring-boot:run
 
-# Terminal 3 — frontend with instant HMR
+# Terminal 3 — frontend
 cd frontend && npm install && npm run dev
 ```
 
-| Service  | URL                                   |
-|----------|---------------------------------------|
-| Frontend | http://localhost:5173                 |
-| Backend  | http://localhost:8080/api             |
+| Service  | URL |
+|----------|-----|
+| Frontend | http://localhost:5173 |
+| Backend  | http://localhost:8080/api |
 | Swagger  | http://localhost:8080/swagger-ui.html |
 
-**Backend auto-restart:** Spring Boot DevTools watches for classfile changes. Whenever you recompile a `.java` file (`Cmd+F9` in IntelliJ, or save in VS Code with the Java extension), the Spring context restarts in ~1–2 seconds without you doing anything.
+**Backend auto-restart:** Spring Boot DevTools watches for classfile changes. Recompile a `.java` file (`Cmd+F9` in IntelliJ) and the context restarts in ~1–2 seconds.
 
-**Frontend HMR:** Vite reflects React changes in the browser instantly, often without a full page reload. The `/api` proxy in `vite.config.js` forwards API calls to `localhost:8080`.
-
-> Docker is still useful for `mvn test` (integration tests need the DB/Redis ports) and for building the final production image.
+**Frontend HMR:** Vite reflects React changes instantly. The `/api` proxy in `vite.config.js` forwards requests to `localhost:8080`.
 
 ---
 
-## Running backend tests
+## Running tests
 
-Integration tests connect to the **already-running Docker Compose services**
-(MySQL on `localhost:3306`, Redis on `localhost:6379`).  
-Start the stack before running tests:
+### Backend tests
+
+Integration tests connect to the already-running Docker Compose services.
 
 ```bash
-# Terminal 1 — start infrastructure
+# Start infrastructure first
 docker compose up -d mysql redis
 
-# Terminal 2 — run all tests
+# Run all tests
 mvn test
 
-# Just integration tests
+# Integration tests only
 mvn test -Dtest="*IntegrationTest"
 
-# Just unit tests (no Docker needed)
+# Unit tests only (no Docker needed)
 mvn test -Dtest="RouteTest,PriceRecordTest,*UseCaseTest"
 ```
 
-> **Why this approach?**  
-> Integration tests use the `test` Spring profile (`application-test.yml`),
-> which points directly to the Docker-exposed ports on localhost.
-> Database tests are annotated with `@Transactional` so every test rolls back
-> automatically — no data leaks between runs.
+Integration tests use the `test` Spring profile (`src/test/resources/application-test.yml`) and are annotated with `@Transactional` — every test rolls back automatically, no data leaks between runs.
 
----
-
-## Running frontend tests
+### Frontend tests
 
 ```bash
 cd frontend
 npm install
-npm test          # run once
+npm test            # run once
 npm run test:watch  # watch mode
 ```
 
-Tests use **Vitest** + **React Testing Library** with a jsdom environment. Test files live next to the components they cover (`*.test.jsx` / `*.test.js`).
-
-> **Requires Node 18+.** See the Prerequisites section.
+Uses **Vitest** + **React Testing Library** with jsdom. Test files live next to the components they cover (`*.test.jsx` / `*.test.js`).
 
 ---
 
-## Input validation
+## Debugging in Docker
 
-Validation is enforced at two layers:
-
-| Layer | What it checks | Error returned |
-|-------|---------------|----------------|
-| HTTP (DTO, `@Valid`) | `price` not null and positive; `recordedDate` not null; IATA codes are exactly 3 letters; email format; password min 8 chars | `400 Bad Request` with a field-level message |
-| Domain model constructor | Same invariants as a second line of defence | `IllegalArgumentException` → `400 Bad Request` |
-
-This means invalid requests are rejected at the controller before they touch the domain, but the domain itself also stays safe if called directly (e.g. in tests).
-
----
-
-## Debugging the app running in Docker
-
-Use the debug compose override, which adds the JDWP agent and exposes port 5005:
+Use the debug compose override, which adds the JDWP agent on port 5005:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.debug.yml up --build
 ```
 
-The app starts normally (`suspend=n`) and listens for a debugger on port 5005.
+**IntelliJ IDEA:** Run → Edit Configurations → + → Remote JVM Debug → host `localhost`, port `5005`.
 
-### Attach from IntelliJ IDEA
-
-1. **Run → Edit Configurations → + → Remote JVM Debug**
-2. Set:
-   - **Host:** `localhost`
-   - **Port:** `5005`
-   - **Debugger mode:** Attach to remote JVM
-3. Click **Debug** — the debugger connects to the running container.
-4. Set breakpoints as usual; they hit on the next matching request.
-
-### Attach from VS Code
-
-Add this to `.vscode/launch.json`:
+**VS Code** — add to `.vscode/launch.json`:
 
 ```json
 {
@@ -260,189 +272,118 @@ Add this to `.vscode/launch.json`:
 }
 ```
 
-Then open the **Run and Debug** panel and select **Attach to Docker**.
-
 ---
 
 ## REST API
 
-The full interactive API reference is available at **`/swagger-ui.html`** when the app is running. All `/api/routes/**` endpoints require an `Authorization: Bearer <token>` header.
+Full interactive docs at **`/swagger-ui.html`** when the app is running.
 
-### Register
+All `/api/routes/**` endpoints require: `Authorization: Bearer <token>`
 
-```bash
-curl -s -X POST http://localhost:8080/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"alice@example.com","password":"password123"}' | jq
-# → {"token":"eyJ..."}
-```
-
-- `email` must be a valid email address.
-- `password` must be at least 8 characters.
-- Returns `409 Conflict` if the email is already registered.
-
-### Login
-
-```bash
-curl -s -X POST http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"alice@example.com","password":"password123"}' | jq
-# → {"token":"eyJ..."}
-```
-
-- Returns `401 Unauthorized` for invalid credentials.
-- The token is valid for 7 days.
-
----
-
-All examples below assume you've stored your token:
-
+Store your token:
 ```bash
 TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"alice@example.com","password":"password123"}' | jq -r .token)
 ```
 
-### Create a travel route
+### Auth
 
 ```bash
+# Register
+curl -s -X POST http://localhost:8080/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"password123"}' | jq
+
+# Login
+curl -s -X POST http://localhost:8080/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"alice@example.com","password":"password123"}' | jq
+```
+
+### Routes
+
+```bash
+# Create
 curl -s -X POST http://localhost:8080/api/routes \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"origin":"REC","destination":"LIS","travelDate":"2026-12-01"}' | jq
-```
 
-- `origin` and `destination` must be exactly 3 letters (IATA airport codes).
-- `travelDate` is the planned travel date.
+# List
+curl -s http://localhost:8080/api/routes -H "Authorization: Bearer $TOKEN" | jq
 
-### List all routes
+# Delete
+curl -s -X DELETE http://localhost:8080/api/routes/{id} -H "Authorization: Bearer $TOKEN"
 
-```bash
-curl -s http://localhost:8080/api/routes \
-  -H "Authorization: Bearer $TOKEN" | jq
-```
+# Update status (WATCHING | BOOKED | CANCELLED)
+curl -s -X PATCH http://localhost:8080/api/routes/{id}/status \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"status":"BOOKED"}' | jq
 
-Returns only routes belonging to the authenticated user.
-
-### Delete a route
-
-```bash
-curl -s -X DELETE http://localhost:8080/api/routes/{id} \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-Deletes the route, all its segments, and all price records. Returns `404` if the route doesn't exist or belongs to a different user.
-
-### Mark / unmark a route as booked
-
-```bash
-curl -s -X PATCH http://localhost:8080/api/routes/{id}/booked \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"booked":true}' | jq
-```
-
----
-
-### Add a segment to a route
-
-```bash
-curl -s -X POST http://localhost:8080/api/routes/{id}/segments \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"transportType":"FLIGHT","label":null}' | jq
-```
-
-- `transportType` must be one of `FLIGHT`, `BUS`, `CAR`, `BOAT`, `OTHER`.
-- `label` is optional free text (useful for `OTHER` or to add a note to any type).
-
-### List segments for a route
-
-```bash
-curl -s http://localhost:8080/api/routes/{id}/segments \
-  -H "Authorization: Bearer $TOKEN" | jq
-```
-
-### Delete a segment
-
-```bash
-curl -s -X DELETE http://localhost:8080/api/routes/{id}/segments/{segId} \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-Deletes the segment and all its price records.
-
----
-
-### Add a price observation to a segment
-
-```bash
-curl -s -X POST http://localhost:8080/api/routes/{id}/segments/{segId}/prices \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"price":3200.00,"currency":"BRL","recordedDate":"2026-07-01"}' | jq
-```
-
-- `currency` must be one of `BRL`, `USD`, `EUR`, `GBP`.
-- `recordedDate` is the date you spotted the price — can be any date, past or future.
-- Adding a price evicts the segment's Redis cache entry.
-
-### Update a price observation
-
-```bash
-curl -s -X PUT http://localhost:8080/api/routes/{id}/segments/{segId}/prices/{priceId} \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"price":2950.00,"currency":"USD","recordedDate":"2026-07-02"}' | jq
-```
-
-### List price history for a segment
-
-```bash
-curl -s http://localhost:8080/api/routes/{id}/segments/{segId}/prices \
-  -H "Authorization: Bearer $TOKEN" | jq
-```
-
-Results are ordered by `recordedDate` descending (most recent first).
-
-### Delete a price record
-
-```bash
-curl -s -X DELETE http://localhost:8080/api/routes/{id}/segments/{segId}/prices/{priceId} \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-### Get price summary (per-segment breakdown)
-
-```bash
+# Price summary (latest/lowest/purchased per segment)
 curl -s http://localhost:8080/api/routes/{id}/prices/summary \
   -H "Authorization: Bearer $TOKEN" | jq
 ```
 
-Returns a list of per-segment summaries, each with `latestPrice` and `lowestPrice`. Both are `null` if the segment has no price records yet.
+### Segments
+
+```bash
+# Add segment
+curl -s -X POST http://localhost:8080/api/routes/{id}/segments \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"transportType":"FLIGHT","label":null}' | jq
+
+# List segments
+curl -s http://localhost:8080/api/routes/{id}/segments \
+  -H "Authorization: Bearer $TOKEN" | jq
+
+# Delete segment
+curl -s -X DELETE http://localhost:8080/api/routes/{id}/segments/{segId} \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Prices
+
+```bash
+# Add price
+curl -s -X POST http://localhost:8080/api/routes/{id}/segments/{segId}/prices \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"price":3200.00,"currency":"BRL","recordedDate":"2026-07-01"}' | jq
+
+# List price history (newest first)
+curl -s http://localhost:8080/api/routes/{id}/segments/{segId}/prices \
+  -H "Authorization: Bearer $TOKEN" | jq
+
+# Update price
+curl -s -X PUT http://localhost:8080/api/routes/{id}/segments/{segId}/prices/{priceId} \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"price":2950.00,"currency":"USD","recordedDate":"2026-07-02"}' | jq
+
+# Delete price
+curl -s -X DELETE http://localhost:8080/api/routes/{id}/segments/{segId}/prices/{priceId} \
+  -H "Authorization: Bearer $TOKEN"
+
+# Toggle purchased flag (mark if not purchased, unmark if already purchased)
+curl -s -X PATCH http://localhost:8080/api/routes/{id}/segments/{segId}/prices/{priceId}/purchase \
+  -H "Authorization: Bearer $TOKEN" | jq
+```
+
+Currencies supported: `BRL`, `USD`, `EUR`, `GBP`
+
+---
+
+## Input validation
+
+| Layer | What it checks | Error |
+|-------|---------------|-------|
+| HTTP DTO (`@Valid`) | positive price, non-null date, 3-letter IATA codes, valid email, password ≥ 8 chars | `400 Bad Request` |
+| Domain constructor | Same invariants as a second line of defence | `IllegalArgumentException` → `400` |
 
 ---
 
 ## Planned features
 
-- **Email verification** — send an activation link on registration; block login until the email is confirmed. Requires `spring-boot-starter-mail` and an SMTP provider (SendGrid, Mailgun, AWS SES, etc.).
-- **JWT revocation** — store a blocklist of invalidated token IDs in Redis so logout is effective immediately, even before the 7-day expiry.
-- **External price API** — implement `PriceCachePort` in a new adapter; zero changes to domain or application code:
-
-```java
-@Component
-@Primary  // takes precedence over RedisPriceCacheAdapter
-public class ExternalApiPriceCacheAdapter implements PriceCachePort {
-
-    private final FlightApiClient apiClient;
-    private final RedisPriceCacheAdapter redisCache;
-
-    @Override
-    public Optional<Money> getLatestPrice(Long routeId) {
-        return redisCache.getLatestPrice(routeId)
-            .or(() -> apiClient.fetchLatestPrice(routeId)
-                .map(money -> { redisCache.storeLatestPrice(routeId, money); return money; }));
-    }
-    // storeLatestPrice and evict delegate to redisCache
-}
-```
+- **Email price alerts** — notify the user when a segment's price drops below a threshold (`@Scheduled` job + Spring Mail)
+- **PWA / installable** — `manifest.json` + service worker so the app can be installed on a phone's home screen
+- **JWT revocation** — store invalidated token IDs in Redis so logout is effective before the 7-day expiry
+- **External price API** — plug in a real fares API via a new `PriceCachePort` adapter; zero changes to domain or application code
