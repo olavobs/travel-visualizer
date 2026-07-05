@@ -52,8 +52,8 @@ describe('FlightTree', () => {
 
   it('shows journey total when prices load successfully', async () => {
     api.getPriceSummary
-      .mockResolvedValueOnce({ segments: [{ latestPrice: 500.00, latestCurrency: 'USD' }] })
-      .mockResolvedValueOnce({ segments: [{ latestPrice: 300.00, latestCurrency: 'USD' }] });
+      .mockResolvedValueOnce({ segments: [{ lowestPrice: 500.00, lowestCurrency: 'USD' }] })
+      .mockResolvedValueOnce({ segments: [{ lowestPrice: 300.00, lowestCurrency: 'USD' }] });
 
     renderTree(routes);
     fireEvent.click(screen.getByText('CDG'));
@@ -61,6 +61,6 @@ describe('FlightTree', () => {
     await waitFor(() =>
       expect(screen.getByText(/Journey total/i)).toBeInTheDocument()
     );
-    expect(screen.getByText('$800.00')).toBeInTheDocument();
+    expect(screen.getByText('US$ 800.00')).toBeInTheDocument();
   });
 });

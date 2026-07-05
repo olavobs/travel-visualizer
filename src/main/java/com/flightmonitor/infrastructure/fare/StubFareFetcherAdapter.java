@@ -6,15 +6,11 @@ import com.flightmonitor.domain.model.Route;
 import com.flightmonitor.domain.port.FareFetcherPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.Random;
 
-@Component
-@ConditionalOnMissingBean(FareFetcherPort.class)
 public class StubFareFetcherAdapter implements FareFetcherPort {
 
     private static final Logger log = LoggerFactory.getLogger(StubFareFetcherAdapter.class);

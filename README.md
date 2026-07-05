@@ -117,15 +117,13 @@ The journey tree uses `purchasedPrice ?? lowestPrice` as the representative cost
 
 ### Database migrations
 
-Five Flyway migrations in order:
+A single Flyway migration creates the full schema from scratch:
 
-| Version | Change |
-|---------|--------|
-| V1 | Initial schema: users, flight_routes, price_records |
-| V2 | Add `booked` boolean to routes |
-| V3 | Rename to travel_routes, add travel_segments, migrate price_records to segment-based |
-| V4 | Replace `booked` boolean with `status` enum (WATCHING/BOOKED/CANCELLED) |
-| V5 | Add `purchased` boolean to price_records |
+| Version | What it creates |
+|---------|----------------|
+| V1 | `users`, `travel_routes` (with `status`), `travel_segments`, `price_records` (with `segment_id`, `recorded_at`, `purchased`) |
+
+> **Resetting the database:** `docker compose down -v && docker compose up -d mysql redis` drops all volumes and lets Flyway recreate everything cleanly from V1.
 
 ---
 
@@ -136,10 +134,10 @@ Five Flyway migrations in order:
 | Java | 21+ | Backend |
 | Maven | 3.9+ | Backend build |
 | Docker & Docker Compose | any recent | Full stack / infrastructure |
-| Node.js | **18+** | Frontend dev server & tests |
+| Node.js | **20+** | Frontend dev server & tests |
 
-> **Node 18 is required.** Vite 5 requires Node ≥ 18. Node 16 will fail.
-> Upgrade via nvm: `nvm install 18 && nvm use 18`
+> **Node 20 is required.** Vite 5 requires Node ≥ 18; Node 20 LTS is recommended (matches CI).
+> Upgrade via nvm: `nvm install 20 && nvm use 20`
 
 ---
 
@@ -228,7 +226,7 @@ cd frontend && npm install && npm run dev
 
 **Backend auto-restart:** Spring Boot DevTools watches for classfile changes. Recompile a `.java` file (`Cmd+F9` in IntelliJ) and the context restarts in ~1–2 seconds.
 
-**Frontend HMR:** Vite reflects React changes instantly. The `/api` proxy in `vite.config.js` forwards requests to `localhost:8080`.
+**Frontend HMR:** Vite reflects React changes instantly. The `/v1` proxy in `vite.config.js` forwards requests to `localhost:8080`.
 
 ---
 
@@ -265,6 +263,65 @@ mvn test -Dtest="RouteTest,PriceRecordTest,*UseCaseTest"
 
 Integration tests use the `test` Spring profile (`src/test/resources/application-test.yml`) and are annotated with `@Transactional` — every test rolls back automatically, no data leaks between runs.
 
+#### Backend tests in debug mode
+
+**Option A — run directly from IntelliJ IDEA (simplest)**
+
+This is the fastest way for day-to-day debugging. IntelliJ runs the test in-process so breakpoints just work.
+
+1. Start infrastructure: `docker compose up -d mysql redis`
+2. Open the test class (e.g. `JdbcRouteRepositoryIntegrationTest`)
+3. Set breakpoints anywhere in the test or in the production code it calls
+4. Right-click the test class or a single test method → **Debug**
+
+IntelliJ automatically passes `-Dspring.profiles.active=test` if you configure it once:
+Run → Edit Configurations → select the test run config → VM options: `-Dspring.profiles.active=test`
+
+After that every right-click → Debug on any test class picks up the profile automatically.
+
+**Option B — Maven CLI + remote attach (useful in CI parity / terminal workflows)**
+
+Maven Surefire can fork the JVM with JDWP enabled. The `-Dmaven.surefire.debug` flag suspends the test JVM on port **5005** and waits for a debugger to attach.
+
+**Step 1 — start infrastructure**
+```bash
+docker compose up -d mysql redis
+```
+
+**Step 2 — run tests in debug mode**
+```bash
+# All tests — suspends until debugger connects
+mvn test -Dmaven.surefire.debug -Dspring.profiles.active=test
+
+# Single class — faster iteration
+mvn test -Dmaven.surefire.debug -Dtest=JdbcRouteRepositoryIntegrationTest -Dspring.profiles.active=test
+```
+
+The process prints `Listening for transport dt_socket at address: 5005` and pauses.
+
+**Step 3 — attach your IDE**
+
+*IntelliJ IDEA:* Run → Edit Configurations → `+` → Remote JVM Debug → host `localhost`, port `5005` → click Debug.
+
+*VS Code* — add to `.vscode/launch.json`:
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Attach to Maven test",
+      "request": "attach",
+      "hostName": "localhost",
+      "port": 5005
+    }
+  ]
+}
+```
+Then open the Run & Debug panel and launch `Attach to Maven test`.
+
+Set your breakpoints before attaching — the JVM resumes as soon as the debugger connects.
+
 ### Frontend tests
 
 ```bash
@@ -275,6 +332,39 @@ npm run test:watch  # watch mode
 ```
 
 Uses **Vitest** + **React Testing Library** with jsdom. Test files live next to the components they cover (`*.test.jsx` / `*.test.js`).
+
+#### Frontend tests in debug mode
+
+Vitest exposes the Node.js inspector via `--inspect-brk`, which pauses execution before any test runs and waits for a debugger.
+
+**Step 1 — run Vitest with the inspector**
+```bash
+cd frontend
+node --inspect-brk node_modules/vitest/vitest.mjs run
+```
+
+The terminal prints something like:
+```
+Debugger listening on ws://127.0.0.1:9229/...
+```
+
+**Step 2 — attach your browser or IDE**
+
+*Chrome DevTools:* open `chrome://inspect`, click **Open dedicated DevTools for Node** → Sources tab → set breakpoints.
+
+*VS Code* — add to `.vscode/launch.json`:
+```json
+{
+  "type": "node",
+  "request": "launch",
+  "name": "Debug Vitest",
+  "runtimeExecutable": "node",
+  "runtimeArgs": ["--inspect-brk", "node_modules/vitest/vitest.mjs", "run"],
+  "cwd": "${workspaceFolder}/frontend",
+  "console": "integratedTerminal"
+}
+```
+Launch it from the Run & Debug panel. VS Code will stop at the first breakpoint you set in any `.test.jsx` / `.test.js` file.
 
 ---
 
@@ -381,7 +471,7 @@ curl -s -X DELETE http://localhost:8080/v1/routes/{id}/segments/{segId} \
 # Add price
 curl -s -X POST http://localhost:8080/v1/routes/{id}/segments/{segId}/prices \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"price":3200.00,"currency":"BRL","recordedDate":"2026-07-01"}' | jq
+  -d '{"money":{"amount":3200.00,"currency":"BRL"},"recordedAt":"2026-07-01T00:00:00Z"}' | jq
 
 # List price history (newest first)
 curl -s http://localhost:8080/v1/routes/{id}/segments/{segId}/prices \
@@ -390,7 +480,7 @@ curl -s http://localhost:8080/v1/routes/{id}/segments/{segId}/prices \
 # Update price
 curl -s -X PUT http://localhost:8080/v1/routes/{id}/segments/{segId}/prices/{priceId} \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"price":2950.00,"currency":"USD","recordedDate":"2026-07-02"}' | jq
+  -d '{"money":{"amount":2950.00,"currency":"USD"},"recordedAt":"2026-07-02T00:00:00Z"}' | jq
 
 # Delete price
 curl -s -X DELETE http://localhost:8080/v1/routes/{id}/segments/{segId}/prices/{priceId} \

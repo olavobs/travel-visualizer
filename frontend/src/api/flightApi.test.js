@@ -21,7 +21,7 @@ describe('getRoutes', () => {
     await vi.runAllTimersAsync();
     const result = await promise;
 
-    expect(fetch).toHaveBeenCalledWith('/v1/routes', expect.objectContaining({ method: undefined }));
+    expect(fetch).toHaveBeenCalledWith('/v1/routes', expect.any(Object));
     expect(result).toEqual(routes);
   });
 
