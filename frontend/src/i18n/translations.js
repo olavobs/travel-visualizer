@@ -59,6 +59,7 @@ const translations = {
       unmarkTitle: 'Click to unmark as purchased',
       remove: 'Remove',
       deleteSegmentConfirm: 'Delete {type} segment and all its price records?',
+      chartTitle: 'Price Trend',
     },
     createRoute: {
       title: 'New Travel Route',
@@ -142,6 +143,7 @@ const translations = {
       unmarkTitle: 'Clique para desmarcar como comprado',
       remove: 'Remover',
       deleteSegmentConfirm: 'Excluir segmento {type} e todos os seus preços?',
+      chartTitle: 'Evolução de Preços',
     },
     createRoute: {
       title: 'Nova Rota de Viagem',

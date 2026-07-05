@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   getSegments, createSegment, deleteSegment,
   getPriceHistory, addPrice, updatePrice, deletePriceRecord,
@@ -6,6 +6,10 @@ import {
 } from '../api/flightApi';
 import { CURRENCIES, formatPrice } from '../utils/currency';
 import { useT } from '../i18n/LanguageContext';
+import {
+  ResponsiveContainer, LineChart, Line, XAxis, YAxis,
+  CartesianGrid, Tooltip, Legend,
+} from 'recharts';
 
 const STATUSES = ['WATCHING', 'BOOKED', 'CANCELLED'];
 const STATUS_BADGE_CLASS = { WATCHING: 'badge--watching', BOOKED: 'badge--booked', CANCELLED: 'badge--cancelled' };
@@ -21,6 +25,62 @@ const TRANSPORT_ICONS = {
 const TRANSPORT_TYPES = ['FLIGHT', 'BUS', 'CAR', 'BOAT', 'OTHER'];
 
 const today = () => new Date().toISOString().split('T')[0];
+
+const CHART_COLORS = ['#2563eb', '#16a34a', '#dc2626', '#d97706', '#7c3aed'];
+
+function PurchasedDot({ cx, cy, payload, stroke }) {
+  if (cx == null || cy == null) return null;
+  if (payload.purchased)
+    return <circle cx={cx} cy={cy} r={6} fill="#16a34a" stroke="#fff" strokeWidth={2} />;
+  return <circle cx={cx} cy={cy} r={3} fill={stroke} />;
+}
+
+function PriceChart({ history, t }) {
+  const { currencies, chartData } = useMemo(() => {
+    const sorted = [...history].sort((a, b) => a.recordedDate.localeCompare(b.recordedDate));
+    const currencySet = [...new Set(sorted.map(r => r.currency))];
+    const byDate = {};
+    for (const r of sorted) {
+      if (!byDate[r.recordedDate]) byDate[r.recordedDate] = { date: r.recordedDate };
+      byDate[r.recordedDate][r.currency] = Number(r.price);
+      if (r.purchased) byDate[r.recordedDate].purchased = true;
+    }
+    return { currencies: currencySet, chartData: Object.values(byDate) };
+  }, [history]);
+
+  if (chartData.length < 2) return null;
+
+  return (
+    <div className="price-chart">
+      <p className="price-chart__title">{t('routeDetail.chartTitle')}</p>
+      <ResponsiveContainer width="100%" height={200}>
+        <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey="date" tick={{ fontSize: 11 }} tickLine={false} />
+          <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} width={60}
+            tickFormatter={v => v.toLocaleString()} />
+          <Tooltip
+            formatter={(value, name) => [value.toLocaleString(), name]}
+            contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+          />
+          {currencies.length > 1 && <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />}
+          {currencies.map((currency, i) => (
+            <Line
+              key={currency}
+              type="monotone"
+              dataKey={currency}
+              stroke={CHART_COLORS[i % CHART_COLORS.length]}
+              strokeWidth={2}
+              dot={<PurchasedDot />}
+              activeDot={{ r: 5 }}
+              connectNulls
+            />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
 
 function SegmentSection({ routeId, segment, onDeleted, onPurchased }) {
   const t = useT();
@@ -168,6 +228,8 @@ function SegmentSection({ routeId, segment, onDeleted, onPurchased }) {
               </button>
             </div>
           </form>
+
+          <PriceChart history={history} t={t} />
 
           {history.length === 0 ? (
             <p className="empty-state">{t('routeDetail.noPrices')}</p>

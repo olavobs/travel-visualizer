@@ -774,6 +774,23 @@ h1 {
   background: #f0fdf4;
 }
 
+.price-chart {
+  margin: 1rem 0;
+  padding: 1rem;
+  background: var(--bg);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.price-chart__title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 0.75rem;
+}
+
 .route-status-row {
   display: flex;
   align-items: center;
