@@ -1,0 +1,2 @@
+ALTER TABLE flight_routes
+    ADD COLUMN booked BOOLEAN NOT NULL DEFAULT FALSE;

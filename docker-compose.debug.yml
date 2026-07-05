@@ -1,0 +1,14 @@
+# Debug override — use together with the base compose file:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.debug.yml up --build
+#
+# This adds the JDWP agent to the JVM and exposes port 5005 so your IDE
+# can attach a remote debugger. suspend=n means the app starts immediately
+# without waiting for a debugger to connect.
+services:
+  app:
+    ports:
+      - "5005:5005"
+    environment:
+      JAVA_TOOL_OPTIONS: >-
+        -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
