@@ -14,6 +14,16 @@ public record RouteSummaryHttpResponse(
         LocalDate travelDate,
         List<SegmentSummaryItem> segments
 ) {
+    public static RouteSummaryHttpResponse from(RouteSummaryResponse result) {
+        return new RouteSummaryHttpResponse(
+                result.routeId(),
+                result.origin(),
+                result.destination(),
+                result.travelDate(),
+                result.segments().stream().map(SegmentSummaryItem::from).toList()
+        );
+    }
+
     public record SegmentSummaryItem(
             Long segmentId,
             String transportType,
@@ -38,15 +48,5 @@ public record RouteSummaryHttpResponse(
                     s.purchasedPrice() != null ? s.purchasedPrice().currency().name() : null
             );
         }
-    }
-
-    public static RouteSummaryHttpResponse from(RouteSummaryResponse result) {
-        return new RouteSummaryHttpResponse(
-                result.routeId(),
-                result.origin(),
-                result.destination(),
-                result.travelDate(),
-                result.segments().stream().map(SegmentSummaryItem::from).toList()
-        );
     }
 }

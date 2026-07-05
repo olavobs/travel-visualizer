@@ -17,12 +17,19 @@ spring:
       repositories:
         enabled: false  # Disable Redis repositories — we use the cache port directly
 
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
 server:
   port: 8080
 
 app:
   jwt:
     secret: ${JWT_SECRET:change-this-secret-to-32-or-more-chars!!}
+
+serpapi:
+  api-key: ${SERPAPI_KEY:}
 
 logging:
   level:

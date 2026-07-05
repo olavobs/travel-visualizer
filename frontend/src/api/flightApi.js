@@ -1,6 +1,6 @@
 import { getToken, clearToken } from './authApi';
 
-const BASE = '/api/routes';
+const BASE = '/v1/routes';
 const TIMEOUT_MS = 8000;
 
 async function request(url, options = {}) {
@@ -89,19 +89,19 @@ export function getPriceHistory(routeId, segmentId) {
   return request(`${BASE}/${routeId}/segments/${segmentId}/prices`);
 }
 
-export function addPrice(routeId, segmentId, price, currency, recordedDate) {
+export function addPrice(routeId, segmentId, amount, currency, dateStr) {
   return request(`${BASE}/${routeId}/segments/${segmentId}/prices`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ price, currency, recordedDate }),
+    body: JSON.stringify({ money: { amount, currency }, recordedAt: `${dateStr}T00:00:00Z` }),
   });
 }
 
-export function updatePrice(routeId, segmentId, priceId, price, currency, recordedDate) {
+export function updatePrice(routeId, segmentId, priceId, amount, currency, dateStr) {
   return request(`${BASE}/${routeId}/segments/${segmentId}/prices/${priceId}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ price, currency, recordedDate }),
+    body: JSON.stringify({ money: { amount, currency }, recordedAt: `${dateStr}T00:00:00Z` }),
   });
 }
 

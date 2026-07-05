@@ -1,5 +1,7 @@
 # TripTrack
 
+[![CI](https://github.com/olavobs/travel-visualizer/actions/workflows/ci.yml/badge.svg)](https://github.com/olavobs/travel-visualizer/actions/workflows/ci.yml)
+
 A multi-user web application for planning and monitoring travel prices across different transport types (flights, buses, cars, boats). Built with Clean Architecture on Spring Boot + React.
 
 ---
@@ -42,6 +44,7 @@ Transport types: `FLIGHT | BUS | CAR | BOAT | OTHER`
 | Cache | Redis 7 |
 | Auth | JWT (HS256, 7-day expiry, stateless) |
 | API docs | SpringDoc OpenAPI (Swagger UI) |
+| External fares | SerpApi (Google Flights) |
 | Frontend | React 18, Vite 5 |
 | Charts | Recharts |
 | Containerisation | Docker, Docker Compose |
@@ -66,7 +69,8 @@ com.flightmonitor
 │   ├── cache/                 ← RedisPriceCacheAdapter
 │   └── security/              ← JwtService, JwtAuthenticationFilter, SecurityConfig, UserAuthentication
 └── interfaces/
-    └── web/                   ← RouteController, AuthController, GlobalExceptionHandler
+    └── web/                   ← RouteController, SegmentController, PriceRecordController, AuthController, GlobalExceptionHandler
+        ├── docs/              ← OpenAPI/Swagger annotation interfaces (RouteControllerDocs, SegmentControllerDocs, PriceRecordControllerDocs)
         └── dto/               ← HTTP request/response records
 ```
 
@@ -82,9 +86,9 @@ Raw `JdbcTemplate` is used instead of JPA/Hibernate. The domain models are plain
 
 The security boundary is the controller layer only. Use cases receive a plain `Long userId` extracted from the JWT — they know nothing about Spring Security. This keeps the application layer testable without a security context.
 
-- `POST /api/auth/register` — creates an account, returns a JWT
-- `POST /api/auth/login` — validates credentials, returns a JWT
-- All `/api/routes/**` endpoints require `Authorization: Bearer <token>`
+- `POST /v1/auth/register` — creates an account, returns a JWT
+- `POST /v1/auth/login` — validates credentials, returns a JWT
+- All `/v1/routes/**` endpoints require `Authorization: Bearer <token>`
 
 ### Multi-tenancy (IDOR protection)
 
@@ -144,11 +148,14 @@ Five Flyway migrations in order:
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `JWT_SECRET` | Recommended in prod | `change-this-secret-to-32-or-more-chars!!` | HS256 signing key — must be ≥ 32 characters |
+| `SERPAPI_KEY` | Optional | _(empty)_ | SerpApi key for automated daily fare fetching — get one at serpapi.com |
 
-Generate a strong secret for production:
+Generate a strong JWT secret for production:
 ```bash
 openssl rand -base64 48
 ```
+
+When `SERPAPI_KEY` is not set, the app starts normally and a **stub adapter** activates instead, returning random prices — useful for local development without spending API credits.
 
 ---
 
@@ -169,10 +176,10 @@ docker compose up --build
 | Service  | URL |
 |----------|-----|
 | Frontend | http://localhost:3000 |
-| Backend  | http://localhost:8080/api |
+| Backend  | http://localhost:8080/v1 |
 | Swagger  | http://localhost:8080/swagger-ui.html |
 
-The frontend Nginx container proxies `/api/` to the backend over Docker's internal network — port 8080 does not need to be open in the browser.
+The frontend Nginx container proxies `/v1/` to the backend over Docker's internal network — port 8080 does not need to be open in the browser.
 
 Stop and remove containers:
 
@@ -187,11 +194,26 @@ docker compose down -v     # also wipe database
 
 Run only the infrastructure in Docker, everything else locally. This gives hot-module replacement on the frontend and fast backend restarts without rebuilding images.
 
+A `Makefile` at the project root provides shortcut commands:
+
+```bash
+make up       # infra + backend with stub fare fetcher (no API key needed)
+make up-real  # infra + backend with real SerpApi fare fetcher (reads SERPAPI_KEY from .env)
+make frontend # frontend dev server
+make stop     # docker compose down
+```
+
+Or run manually:
+
 ```bash
 # Terminal 1 — infrastructure only (run once)
 docker compose up -d mysql redis
 
-# Terminal 2 — backend
+# Terminal 2 — backend (stub mode)
+mvn spring-boot:run
+
+# Terminal 2 — backend (real SerpApi mode)
+export SERPAPI_KEY=your_key_here
 mvn spring-boot:run
 
 # Terminal 3 — frontend
@@ -201,12 +223,23 @@ cd frontend && npm install && npm run dev
 | Service  | URL |
 |----------|-----|
 | Frontend | http://localhost:5173 |
-| Backend  | http://localhost:8080/api |
+| Backend  | http://localhost:8080/v1 |
 | Swagger  | http://localhost:8080/swagger-ui.html |
 
 **Backend auto-restart:** Spring Boot DevTools watches for classfile changes. Recompile a `.java` file (`Cmd+F9` in IntelliJ) and the context restarts in ~1–2 seconds.
 
 **Frontend HMR:** Vite reflects React changes instantly. The `/api` proxy in `vite.config.js` forwards requests to `localhost:8080`.
+
+---
+
+## CI
+
+Every push and pull request to `main` runs the full test suite automatically via GitHub Actions (`.github/workflows/ci.yml`). The workflow runs two jobs in parallel:
+
+| Job | What it does |
+|-----|-------------|
+| `backend` | Spins up MySQL 8 + Redis 7, then runs `mvn test` (unit + integration) |
+| `frontend` | Installs Node 20, then runs Vitest |
 
 ---
 
@@ -278,11 +311,11 @@ docker compose -f docker-compose.yml -f docker-compose.debug.yml up --build
 
 Full interactive docs at **`/swagger-ui.html`** when the app is running.
 
-All `/api/routes/**` endpoints require: `Authorization: Bearer <token>`
+All `/v1/routes/**` endpoints require: `Authorization: Bearer <token>`
 
 Store your token:
 ```bash
-TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
+TOKEN=$(curl -s -X POST http://localhost:8080/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"alice@example.com","password":"password123"}' | jq -r .token)
 ```
@@ -291,12 +324,12 @@ TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
 
 ```bash
 # Register
-curl -s -X POST http://localhost:8080/api/auth/register \
+curl -s -X POST http://localhost:8080/v1/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"alice@example.com","password":"password123"}' | jq
 
 # Login
-curl -s -X POST http://localhost:8080/api/auth/login \
+curl -s -X POST http://localhost:8080/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"alice@example.com","password":"password123"}' | jq
 ```
@@ -305,23 +338,23 @@ curl -s -X POST http://localhost:8080/api/auth/login \
 
 ```bash
 # Create
-curl -s -X POST http://localhost:8080/api/routes \
+curl -s -X POST http://localhost:8080/v1/routes \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"origin":"REC","destination":"LIS","travelDate":"2026-12-01"}' | jq
 
 # List
-curl -s http://localhost:8080/api/routes -H "Authorization: Bearer $TOKEN" | jq
+curl -s http://localhost:8080/v1/routes -H "Authorization: Bearer $TOKEN" | jq
 
 # Delete
-curl -s -X DELETE http://localhost:8080/api/routes/{id} -H "Authorization: Bearer $TOKEN"
+curl -s -X DELETE http://localhost:8080/v1/routes/{id} -H "Authorization: Bearer $TOKEN"
 
 # Update status (WATCHING | BOOKED | CANCELLED)
-curl -s -X PATCH http://localhost:8080/api/routes/{id}/status \
+curl -s -X PATCH http://localhost:8080/v1/routes/{id}/status \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"status":"BOOKED"}' | jq
 
 # Price summary (latest/lowest/purchased per segment)
-curl -s http://localhost:8080/api/routes/{id}/prices/summary \
+curl -s http://localhost:8080/v1/routes/{id}/prices/summary \
   -H "Authorization: Bearer $TOKEN" | jq
 ```
 
@@ -329,16 +362,16 @@ curl -s http://localhost:8080/api/routes/{id}/prices/summary \
 
 ```bash
 # Add segment
-curl -s -X POST http://localhost:8080/api/routes/{id}/segments \
+curl -s -X POST http://localhost:8080/v1/routes/{id}/segments \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"transportType":"FLIGHT","label":null}' | jq
 
 # List segments
-curl -s http://localhost:8080/api/routes/{id}/segments \
+curl -s http://localhost:8080/v1/routes/{id}/segments \
   -H "Authorization: Bearer $TOKEN" | jq
 
 # Delete segment
-curl -s -X DELETE http://localhost:8080/api/routes/{id}/segments/{segId} \
+curl -s -X DELETE http://localhost:8080/v1/routes/{id}/segments/{segId} \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -346,25 +379,25 @@ curl -s -X DELETE http://localhost:8080/api/routes/{id}/segments/{segId} \
 
 ```bash
 # Add price
-curl -s -X POST http://localhost:8080/api/routes/{id}/segments/{segId}/prices \
+curl -s -X POST http://localhost:8080/v1/routes/{id}/segments/{segId}/prices \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"price":3200.00,"currency":"BRL","recordedDate":"2026-07-01"}' | jq
 
 # List price history (newest first)
-curl -s http://localhost:8080/api/routes/{id}/segments/{segId}/prices \
+curl -s http://localhost:8080/v1/routes/{id}/segments/{segId}/prices \
   -H "Authorization: Bearer $TOKEN" | jq
 
 # Update price
-curl -s -X PUT http://localhost:8080/api/routes/{id}/segments/{segId}/prices/{priceId} \
+curl -s -X PUT http://localhost:8080/v1/routes/{id}/segments/{segId}/prices/{priceId} \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"price":2950.00,"currency":"USD","recordedDate":"2026-07-02"}' | jq
 
 # Delete price
-curl -s -X DELETE http://localhost:8080/api/routes/{id}/segments/{segId}/prices/{priceId} \
+curl -s -X DELETE http://localhost:8080/v1/routes/{id}/segments/{segId}/prices/{priceId} \
   -H "Authorization: Bearer $TOKEN"
 
 # Toggle purchased flag (mark if not purchased, unmark if already purchased)
-curl -s -X PATCH http://localhost:8080/api/routes/{id}/segments/{segId}/prices/{priceId}/purchase \
+curl -s -X PATCH http://localhost:8080/v1/routes/{id}/segments/{segId}/prices/{priceId}/purchase \
   -H "Authorization: Bearer $TOKEN" | jq
 ```
 
@@ -381,9 +414,44 @@ Currencies supported: `BRL`, `USD`, `EUR`, `GBP`
 
 ---
 
+## Automated price fetching
+
+Every day at **8 am (America/Sao_Paulo)** a scheduled job runs across all routes with status `WATCHING`. For each `FLIGHT` segment it calls the **SerpApi Google Flights** endpoint, extracts the lowest fare, and saves it as a new `PriceRecord` — exactly as if you had logged the price manually.
+
+### How it works
+
+```
+[Cron 08:00 BRT]
+  PriceFetchScheduler
+    → FetchAndStoreDailyPricesUseCase
+        → RouteRepository.findAllByStatus(WATCHING)
+        → SegmentRepository.findByRouteId()     [per route]
+        → [skip non-FLIGHT segments]
+        → FareFetcherPort.fetchLowestFare(route) [per FLIGHT segment]
+              real: SerpApiFareFetcherAdapter → serpapi.com/search?engine=google_flights
+              stub: StubFareFetcherAdapter   → random price (when SERPAPI_KEY is unset)
+        → PriceRecordRepository.save()
+        → PriceCachePort.evict()
+```
+
+Non-FLIGHT segments (BUS, CAR, BOAT, OTHER) are silently skipped — SerpApi only covers flights. A per-segment error is logged and skipped without aborting the rest of the job.
+
+### Trigger manually (dev/testing)
+
+To run the job immediately without waiting for 8 am, call the use case directly or temporarily shorten the cron in `PriceFetchScheduler.java`:
+
+```java
+@Scheduled(cron = "0 */1 * * * *")  // every minute — revert after testing
+```
+
+### Architecture note
+
+The external API dependency is isolated behind `FareFetcherPort` (a domain port interface). Swapping to a different fare provider requires only a new infrastructure adapter — the domain and application layers stay unchanged.
+
+---
+
 ## Planned features
 
-- **Email price alerts** — notify the user when a segment's price drops below a threshold (`@Scheduled` job + Spring Mail)
+- **Email price alerts** — notify the user when a segment's price drops below a threshold (Spring Mail + threshold stored per segment)
 - **PWA / installable** — `manifest.json` + service worker so the app can be installed on a phone's home screen
 - **JWT revocation** — store invalidated token IDs in Redis so logout is effective before the 7-day expiry
-- **External price API** — plug in a real fares API via a new `PriceCachePort` adapter; zero changes to domain or application code

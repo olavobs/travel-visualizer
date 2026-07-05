@@ -1,12 +1,12 @@
 package com.flightmonitor.interfaces.web.dto;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
+import com.flightmonitor.domain.model.TransportType;
+import jakarta.validation.constraints.NotNull;
 
 public record CreateSegmentHttpRequest(
-        @NotBlank(message = "Transport type is required")
-        @Pattern(regexp = "^(FLIGHT|BUS|CAR|BOAT|OTHER)$", message = "Transport type must be FLIGHT, BUS, CAR, BOAT or OTHER")
-        String transportType,
+        @NotNull(message = "Transport type is required")
+        TransportType transportType,
 
         String label
-) {}
+) {
+}

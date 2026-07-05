@@ -15,7 +15,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -42,10 +42,10 @@ class AddPriceRecordUseCaseTest {
 
     @Test
     void shouldSaveRecordAndEvictCache() {
-        var money = new Money(new BigDecimal("2950.00"), Currency.BRL);
-        LocalDate date = LocalDate.of(2026, 4, 11);
-        AddPriceRequest request = new AddPriceRequest(USER_ID, ROUTE_ID, SEG_ID, money, date);
-        PriceRecord savedRecord = new PriceRecord(1L, SEG_ID, money, date);
+        Money money = new Money(new BigDecimal("2950.00"), Currency.BRL);
+        Instant recordedAt = Instant.parse("2026-04-11T00:00:00Z");
+        AddPriceRequest request = new AddPriceRequest(USER_ID, ROUTE_ID, SEG_ID, money, recordedAt);
+        PriceRecord savedRecord = new PriceRecord(1L, SEG_ID, money, recordedAt);
 
         when(routeRepository.existsByIdAndUserId(ROUTE_ID, USER_ID)).thenReturn(true);
         when(segmentRepository.existsByIdAndRouteId(SEG_ID, ROUTE_ID)).thenReturn(true);
@@ -55,7 +55,7 @@ class AddPriceRecordUseCaseTest {
 
         assertThat(result.getPrice().amount()).isEqualByComparingTo(new BigDecimal("2950.00"));
         assertThat(result.getPrice().currency()).isEqualTo(Currency.BRL);
-        assertThat(result.getRecordedDate()).isEqualTo(date);
+        assertThat(result.getRecordedAt()).isEqualTo(recordedAt);
         verify(priceCachePort, times(1)).evict(SEG_ID);
         verify(priceRecordRepository, times(1)).save(any(PriceRecord.class));
     }
@@ -64,7 +64,7 @@ class AddPriceRecordUseCaseTest {
     void shouldThrowRouteNotFoundWhenRouteDoesNotBelongToUser() {
         when(routeRepository.existsByIdAndUserId(99L, USER_ID)).thenReturn(false);
         AddPriceRequest request = new AddPriceRequest(USER_ID, 99L, SEG_ID,
-                new Money(new BigDecimal("100"), Currency.USD), LocalDate.now());
+                new Money(new BigDecimal("100"), Currency.USD), Instant.now());
 
         assertThatThrownBy(() -> useCase.execute(request))
                 .isInstanceOf(RouteNotFoundException.class)

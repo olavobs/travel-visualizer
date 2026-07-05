@@ -1,10 +1,10 @@
 package com.flightmonitor.interfaces.web.dto;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Pattern;
+import com.flightmonitor.domain.model.RouteStatus;
+import jakarta.validation.constraints.NotNull;
 
 public record SetStatusRequest(
-        @NotBlank(message = "Status is required")
-        @Pattern(regexp = "^(WATCHING|BOOKED|CANCELLED)$", message = "Status must be WATCHING, BOOKED or CANCELLED")
-        String status
-) {}
+        @NotNull(message = "Status is required")
+        RouteStatus status
+) {
+}

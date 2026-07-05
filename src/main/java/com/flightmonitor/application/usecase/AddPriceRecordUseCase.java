@@ -35,7 +35,7 @@ public class AddPriceRecordUseCase {
         if (!segmentRepository.existsByIdAndRouteId(request.segmentId(), request.routeId())) {
             throw new PriceRecordNotFoundException(request.segmentId());
         }
-        PriceRecord record = new PriceRecord(request.segmentId(), request.price(), request.recordedDate());
+        PriceRecord record = new PriceRecord(request.segmentId(), request.price(), request.recordedAt());
         PriceRecord saved = priceRecordRepository.save(record);
         priceCachePort.evict(request.segmentId());
         return saved;

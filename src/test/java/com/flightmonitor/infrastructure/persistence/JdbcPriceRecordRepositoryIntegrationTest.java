@@ -11,6 +11,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -44,8 +45,8 @@ class JdbcPriceRecordRepositoryIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldSavePriceRecordAndAssignGeneratedId() {
-        var money = new Money(new BigDecimal("3200.00"), Currency.BRL);
-        PriceRecord record = new PriceRecord(segmentId, money, LocalDate.of(2026, 4, 10));
+        Money money = new Money(new BigDecimal("3200.00"), Currency.BRL);
+        PriceRecord record = new PriceRecord(segmentId, money, Instant.parse("2026-04-10T00:00:00Z"));
 
         PriceRecord saved = priceRecordRepository.save(record);
 
@@ -58,23 +59,23 @@ class JdbcPriceRecordRepositoryIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldFindAllRecordsBySegmentIdOrderedByDateDesc() {
-        priceRecordRepository.save(new PriceRecord(segmentId, new Money(new BigDecimal("3200.00"), Currency.BRL), LocalDate.of(2026, 4, 10)));
-        priceRecordRepository.save(new PriceRecord(segmentId, new Money(new BigDecimal("2950.00"), Currency.USD), LocalDate.of(2026, 4, 11)));
+        priceRecordRepository.save(new PriceRecord(segmentId, new Money(new BigDecimal("3200.00"), Currency.BRL), Instant.parse("2026-04-10T00:00:00Z")));
+        priceRecordRepository.save(new PriceRecord(segmentId, new Money(new BigDecimal("2950.00"), Currency.USD), Instant.parse("2026-04-11T00:00:00Z")));
 
         List<PriceRecord> history = priceRecordRepository.findBySegmentId(segmentId);
 
         assertThat(history).hasSize(2);
-        assertThat(history.get(0).getRecordedDate()).isEqualTo(LocalDate.of(2026, 4, 11));
+        assertThat(history.get(0).getRecordedAt()).isEqualTo(Instant.parse("2026-04-11T00:00:00Z"));
         assertThat(history.get(0).getPrice().currency()).isEqualTo(Currency.USD);
-        assertThat(history.get(1).getRecordedDate()).isEqualTo(LocalDate.of(2026, 4, 10));
+        assertThat(history.get(1).getRecordedAt()).isEqualTo(Instant.parse("2026-04-10T00:00:00Z"));
         assertThat(history.get(1).getPrice().currency()).isEqualTo(Currency.BRL);
     }
 
     @Test
     void shouldFindLowestPriceRecord() {
-        priceRecordRepository.save(new PriceRecord(segmentId, new Money(new BigDecimal("3200.00"), Currency.BRL), LocalDate.of(2026, 4, 10)));
-        priceRecordRepository.save(new PriceRecord(segmentId, new Money(new BigDecimal("2950.00"), Currency.EUR), LocalDate.of(2026, 4, 11)));
-        priceRecordRepository.save(new PriceRecord(segmentId, new Money(new BigDecimal("3100.00"), Currency.BRL), LocalDate.of(2026, 4, 12)));
+        priceRecordRepository.save(new PriceRecord(segmentId, new Money(new BigDecimal("3200.00"), Currency.BRL), Instant.parse("2026-04-10T00:00:00Z")));
+        priceRecordRepository.save(new PriceRecord(segmentId, new Money(new BigDecimal("2950.00"), Currency.EUR), Instant.parse("2026-04-11T00:00:00Z")));
+        priceRecordRepository.save(new PriceRecord(segmentId, new Money(new BigDecimal("3100.00"), Currency.BRL), Instant.parse("2026-04-12T00:00:00Z")));
 
         Optional<PriceRecord> lowest = priceRecordRepository.findLowestBySegmentId(segmentId);
 
@@ -85,13 +86,13 @@ class JdbcPriceRecordRepositoryIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void shouldFindLatestPriceRecord() {
-        priceRecordRepository.save(new PriceRecord(segmentId, new Money(new BigDecimal("3200.00"), Currency.BRL), LocalDate.of(2026, 4, 10)));
-        priceRecordRepository.save(new PriceRecord(segmentId, new Money(new BigDecimal("2950.00"), Currency.GBP), LocalDate.of(2026, 4, 11)));
+        priceRecordRepository.save(new PriceRecord(segmentId, new Money(new BigDecimal("3200.00"), Currency.BRL), Instant.parse("2026-04-10T00:00:00Z")));
+        priceRecordRepository.save(new PriceRecord(segmentId, new Money(new BigDecimal("2950.00"), Currency.GBP), Instant.parse("2026-04-11T00:00:00Z")));
 
         Optional<PriceRecord> latest = priceRecordRepository.findLatestBySegmentId(segmentId);
 
         assertThat(latest).isPresent();
-        assertThat(latest.get().getRecordedDate()).isEqualTo(LocalDate.of(2026, 4, 11));
+        assertThat(latest.get().getRecordedAt()).isEqualTo(Instant.parse("2026-04-11T00:00:00Z"));
         assertThat(latest.get().getPrice().currency()).isEqualTo(Currency.GBP);
     }
 

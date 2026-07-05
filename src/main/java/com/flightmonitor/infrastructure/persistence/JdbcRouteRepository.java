@@ -92,4 +92,13 @@ public class JdbcRouteRepository implements RouteRepository {
         );
         return findById(routeId).orElseThrow();
     }
+
+    @Override
+    public List<Route> findAllByStatus(RouteStatus status) {
+        return jdbcTemplate.query(
+                "SELECT id, user_id, origin, destination, travel_date, status " +
+                "FROM travel_routes WHERE status = ? ORDER BY travel_date ASC",
+                ROW_MAPPER, status.name()
+        );
+    }
 }

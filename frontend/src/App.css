@@ -798,3 +798,142 @@ h1 {
   margin-top: 0.4rem;
   flex-wrap: wrap;
 }
+
+/* ── Create Route Modal (redesigned) ────────────────────────────────────────── */
+
+.cr-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(100, 90, 130, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.cr-card {
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 2rem;
+  width: 100%;
+  max-width: 440px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
+}
+
+.cr-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.cr-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.cr-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cr-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.cr-input {
+  padding: 0.75rem 1rem;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  font-size: 1rem;
+  color: var(--text);
+  background: #fff;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+
+.cr-input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+.cr-submit {
+  margin-top: 0.25rem;
+  width: 100%;
+  padding: 0.9rem;
+  background: #12112a;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.cr-submit:hover:not(:disabled) {
+  background: #1e1c3a;
+}
+
+.cr-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Airport autocomplete ────────────────────────────────────────────────────── */
+
+.airport-input {
+  position: relative;
+}
+
+.cr-input--valid {
+  border-color: var(--success);
+}
+
+.airport-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  list-style: none;
+  z-index: 200;
+  overflow: hidden;
+}
+
+.airport-option {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.airport-option:hover {
+  background: #f1f5f9;
+}
+
+.airport-option__code {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+  min-width: 2.5rem;
+}
+
+.airport-option__info {
+  font-size: 0.8rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

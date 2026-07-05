@@ -19,4 +19,6 @@ public interface RouteRepository {
     void deleteById(Long id);
 
     Route updateStatus(Long routeId, Long userId, RouteStatus status);
+
+    List<Route> findAllByStatus(RouteStatus status);
 }

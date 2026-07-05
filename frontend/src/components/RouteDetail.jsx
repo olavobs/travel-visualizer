@@ -37,13 +37,14 @@ function PurchasedDot({ cx, cy, payload, stroke }) {
 
 function PriceChart({ history, t }) {
   const { currencies, chartData } = useMemo(() => {
-    const sorted = [...history].sort((a, b) => a.recordedDate.localeCompare(b.recordedDate));
-    const currencySet = [...new Set(sorted.map(r => r.currency))];
+    const sorted = [...history].sort((a, b) => a.recordedAt.localeCompare(b.recordedAt));
+    const currencySet = [...new Set(sorted.map(r => r.money.currency))];
     const byDate = {};
     for (const r of sorted) {
-      if (!byDate[r.recordedDate]) byDate[r.recordedDate] = { date: r.recordedDate };
-      byDate[r.recordedDate][r.currency] = Number(r.price);
-      if (r.purchased) byDate[r.recordedDate].purchased = true;
+      const date = r.recordedAt.substring(0, 10);
+      if (!byDate[date]) byDate[date] = { date };
+      byDate[date][r.money.currency] = Number(r.money.amount);
+      if (r.purchased) byDate[date].purchased = true;
     }
     return { currencies: currencySet, chartData: Object.values(byDate) };
   }, [history]);
@@ -282,8 +283,8 @@ function SegmentSection({ routeId, segment, onDeleted, onPurchased }) {
                       </td>
                     ) : (
                       <>
-                        <td>{record.recordedDate}</td>
-                        <td>{formatPrice(record.price, record.currency)}</td>
+                        <td>{record.recordedAt.substring(0, 10)}</td>
+                        <td>{formatPrice(record.money.amount, record.money.currency)}</td>
                         <td className="action-cell">
                           <button
                             className={`btn btn-purchase btn-sm${record.purchased ? ' btn-purchase--active' : ''}`}
@@ -295,7 +296,7 @@ function SegmentSection({ routeId, segment, onDeleted, onPurchased }) {
                           </button>
                           <button className="btn btn-secondary btn-sm" onClick={() => {
                             setEditingId(record.id);
-                            setEditFields({ price: record.price, currency: record.currency, recordedDate: record.recordedDate });
+                            setEditFields({ price: record.money.amount, currency: record.money.currency, recordedDate: record.recordedAt.substring(0, 10) });
                           }}>{t('routeDetail.edit')}</button>
                           <button
                             className="btn btn-danger btn-sm"

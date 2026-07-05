@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -51,7 +52,7 @@ class GetRoutePriceSummaryUseCaseTest {
         when(segmentRepository.findByRouteId(ROUTE_ID)).thenReturn(List.of(segment));
         when(priceCachePort.getLatestPrice(SEG_ID)).thenReturn(Optional.of(cachedMoney));
         when(priceRecordRepository.findLowestBySegmentId(SEG_ID))
-                .thenReturn(Optional.of(new PriceRecord(2L, SEG_ID, lowestMoney, LocalDate.of(2026, 4, 11))));
+                .thenReturn(Optional.of(new PriceRecord(2L, SEG_ID, lowestMoney, Instant.parse("2026-04-11T00:00:00Z"))));
         when(priceRecordRepository.findPurchasedBySegmentId(SEG_ID)).thenReturn(Optional.empty());
 
         RouteSummaryResponse result = useCase.execute(ROUTE_ID, USER_ID);
@@ -68,7 +69,7 @@ class GetRoutePriceSummaryUseCaseTest {
     @Test
     void shouldFallbackToDbAndPopulateCacheOnCacheMiss() {
         var dbMoney = new Money(new BigDecimal("3200.00"), Currency.EUR);
-        PriceRecord latest = new PriceRecord(1L, SEG_ID, dbMoney, LocalDate.of(2026, 4, 10));
+        PriceRecord latest = new PriceRecord(1L, SEG_ID, dbMoney, Instant.parse("2026-04-10T00:00:00Z"));
 
         when(routeRepository.findById(ROUTE_ID)).thenReturn(Optional.of(route));
         when(segmentRepository.findByRouteId(ROUTE_ID)).thenReturn(List.of(segment));

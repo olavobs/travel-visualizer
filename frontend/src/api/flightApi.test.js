@@ -13,7 +13,7 @@ beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('getRoutes', () => {
-  it('fetches from /api/routes', async () => {
+  it('fetches from /v1/routes', async () => {
     const routes = [{ id: 1, origin: 'GRU', destination: 'LIS', travelDate: '2026-12-01' }];
     global.fetch = mockFetch(200, routes);
 
@@ -21,7 +21,7 @@ describe('getRoutes', () => {
     await vi.runAllTimersAsync();
     const result = await promise;
 
-    expect(fetch).toHaveBeenCalledWith('/api/routes', expect.objectContaining({ method: undefined }));
+    expect(fetch).toHaveBeenCalledWith('/v1/routes', expect.objectContaining({ method: undefined }));
     expect(result).toEqual(routes);
   });
 
@@ -52,7 +52,7 @@ describe('createRoute', () => {
     await vi.runAllTimersAsync();
     await promise;
 
-    expect(fetch).toHaveBeenCalledWith('/api/routes', expect.objectContaining({
+    expect(fetch).toHaveBeenCalledWith('/v1/routes', expect.objectContaining({
       method: 'POST',
       body: JSON.stringify({ origin: 'GRU', destination: 'LIS', travelDate: '2026-12-01' }),
     }));
@@ -67,22 +67,22 @@ describe('deleteRoute', () => {
     await vi.runAllTimersAsync();
     const result = await promise;
 
-    expect(fetch).toHaveBeenCalledWith('/api/routes/42', expect.objectContaining({ method: 'DELETE' }));
+    expect(fetch).toHaveBeenCalledWith('/v1/routes/42', expect.objectContaining({ method: 'DELETE' }));
     expect(result).toBeNull();
   });
 });
 
 describe('addPrice', () => {
-  it('sends POST to segment prices endpoint', async () => {
+  it('sends POST with nested money and ISO instant to segment prices endpoint', async () => {
     global.fetch = mockFetch(201, { id: 10 });
 
     const promise = addPrice(1, 5, 2950.00, 'BRL', '2026-04-10');
     await vi.runAllTimersAsync();
     await promise;
 
-    expect(fetch).toHaveBeenCalledWith('/api/routes/1/segments/5/prices', expect.objectContaining({
+    expect(fetch).toHaveBeenCalledWith('/v1/routes/1/segments/5/prices', expect.objectContaining({
       method: 'POST',
-      body: JSON.stringify({ price: 2950.00, currency: 'BRL', recordedDate: '2026-04-10' }),
+      body: JSON.stringify({ money: { amount: 2950.00, currency: 'BRL' }, recordedAt: '2026-04-10T00:00:00Z' }),
     }));
   });
 });
@@ -95,6 +95,6 @@ describe('deletePriceRecord', () => {
     await vi.runAllTimersAsync();
     await promise;
 
-    expect(fetch).toHaveBeenCalledWith('/api/routes/1/segments/5/prices/10', expect.objectContaining({ method: 'DELETE' }));
+    expect(fetch).toHaveBeenCalledWith('/v1/routes/1/segments/5/prices/10', expect.objectContaining({ method: 'DELETE' }));
   });
 });

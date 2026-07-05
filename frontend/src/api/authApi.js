@@ -35,13 +35,13 @@ async function authRequest(url, body) {
 }
 
 export async function register(email, password) {
-  const data = await authRequest('/api/auth/register', { email, password });
+  const data = await authRequest('/v1/auth/register', { email, password });
   setToken(data.token);
   return data;
 }
 
 export async function login(email, password) {
-  const data = await authRequest('/api/auth/login', { email, password });
+  const data = await authRequest('/v1/auth/login', { email, password });
   setToken(data.token);
   return data;
 }

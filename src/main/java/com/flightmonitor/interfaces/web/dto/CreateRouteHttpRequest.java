@@ -19,4 +19,5 @@ public record CreateRouteHttpRequest(
         @NotNull(message = "Travel date is required")
         @JsonFormat(pattern = "yyyy-MM-dd")
         LocalDate travelDate
-) {}
+) {
+}

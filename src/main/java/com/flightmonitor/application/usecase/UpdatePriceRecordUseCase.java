@@ -40,7 +40,7 @@ public class UpdatePriceRecordUseCase {
         if (!existing.getSegmentId().equals(request.segmentId())) {
             throw new PriceRecordNotFoundException(request.priceId());
         }
-        PriceRecord updated = new PriceRecord(existing.getId(), request.segmentId(), request.price(), request.recordedDate(), existing.isPurchased());
+        PriceRecord updated = new PriceRecord(existing.getId(), request.segmentId(), request.price(), request.recordedAt(), existing.isPurchased());
         PriceRecord saved = priceRecordRepository.update(updated);
         priceCachePort.evict(request.segmentId());
         return saved;

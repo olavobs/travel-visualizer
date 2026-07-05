@@ -1,6 +1,6 @@
 package com.flightmonitor.domain.model;
 
-import java.time.LocalDate;
+import java.time.Instant;
 import java.util.Objects;
 
 public class PriceRecord {
@@ -8,34 +8,34 @@ public class PriceRecord {
     private final Long id;
     private final Long segmentId;
     private final Money price;
-    private final LocalDate recordedDate;
+    private final Instant recordedAt;
     private final boolean purchased;
 
-    public PriceRecord(Long segmentId, Money price, LocalDate recordedDate) {
-        this(null, segmentId, price, recordedDate, false);
+    public PriceRecord(Long segmentId, Money price, Instant recordedAt) {
+        this(null, segmentId, price, recordedAt, false);
     }
 
-    public PriceRecord(Long id, Long segmentId, Money price, LocalDate recordedDate) {
-        this(id, segmentId, price, recordedDate, false);
+    public PriceRecord(Long id, Long segmentId, Money price, Instant recordedAt) {
+        this(id, segmentId, price, recordedAt, false);
     }
 
-    public PriceRecord(Long id, Long segmentId, Money price, LocalDate recordedDate, boolean purchased) {
+    public PriceRecord(Long id, Long segmentId, Money price, Instant recordedAt, boolean purchased) {
         Objects.requireNonNull(segmentId, "Segment ID must not be null");
         Objects.requireNonNull(price, "Price must not be null");
-        Objects.requireNonNull(recordedDate, "Recorded date must not be null");
+        Objects.requireNonNull(recordedAt, "Recorded instant must not be null");
 
-        this.id           = id;
-        this.segmentId    = segmentId;
-        this.price        = price;
-        this.recordedDate = recordedDate;
-        this.purchased    = purchased;
+        this.id         = id;
+        this.segmentId  = segmentId;
+        this.price      = price;
+        this.recordedAt = recordedAt;
+        this.purchased  = purchased;
     }
 
-    public Long getId()                { return id; }
-    public Long getSegmentId()         { return segmentId; }
-    public Money getPrice()            { return price; }
-    public LocalDate getRecordedDate() { return recordedDate; }
-    public boolean isPurchased()       { return purchased; }
+    public Long getId()            { return id; }
+    public Long getSegmentId()     { return segmentId; }
+    public Money getPrice()        { return price; }
+    public Instant getRecordedAt() { return recordedAt; }
+    public boolean isPurchased()   { return purchased; }
 
     @Override
     public boolean equals(Object o) {
@@ -49,7 +49,7 @@ public class PriceRecord {
     @Override
     public String toString() {
         return "PriceRecord{id=" + id + ", segmentId=" + segmentId
-                + ", price=" + price + ", recordedDate=" + recordedDate
+                + ", price=" + price + ", recordedAt=" + recordedAt
                 + ", purchased=" + purchased + "}";
     }
 }

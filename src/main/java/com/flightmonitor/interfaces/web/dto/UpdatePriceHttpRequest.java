@@ -1,24 +1,17 @@
 package com.flightmonitor.interfaces.web.dto;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
-import jakarta.validation.constraints.NotBlank;
+import com.flightmonitor.domain.model.Money;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Positive;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
+import java.time.Instant;
 
 public record UpdatePriceHttpRequest(
-        @NotNull(message = "Price is required")
-        @Positive(message = "Price must be positive")
-        BigDecimal price,
-
-        @NotBlank(message = "Currency is required")
-        @Pattern(regexp = "^(BRL|USD|EUR|GBP)$", message = "Currency must be BRL, USD, EUR or GBP")
-        String currency,
+        @NotNull(message = "Money is required")
+        @Valid
+        Money money,
 
         @NotNull(message = "Date seen is required")
-        @JsonFormat(pattern = "yyyy-MM-dd")
-        LocalDate recordedDate
-) {}
+        Instant recordedAt
+) {
+}

@@ -16,16 +16,27 @@ public class Segment {
     public Segment(Long id, Long routeId, TransportType transportType, String label) {
         Objects.requireNonNull(routeId, "Route ID must not be null");
         Objects.requireNonNull(transportType, "Transport type must not be null");
-        this.id            = id;
-        this.routeId       = routeId;
+        this.id = id;
+        this.routeId = routeId;
         this.transportType = transportType;
-        this.label         = label;
+        this.label = label;
     }
 
-    public Long getId()                    { return id; }
-    public Long getRouteId()               { return routeId; }
-    public TransportType getTransportType(){ return transportType; }
-    public String getLabel()               { return label; }
+    public Long getId() {
+        return id;
+    }
+
+    public Long getRouteId() {
+        return routeId;
+    }
+
+    public TransportType getTransportType() {
+        return transportType;
+    }
+
+    public String getLabel() {
+        return label;
+    }
 
     @Override
     public boolean equals(Object o) {
@@ -34,7 +45,10 @@ public class Segment {
         return Objects.equals(id, that.id);
     }
 
-    @Override public int hashCode() { return Objects.hash(id); }
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
 
     @Override
     public String toString() {

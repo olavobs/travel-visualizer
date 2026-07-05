@@ -7,7 +7,7 @@ export default defineConfig({
     // When running "npm run dev" locally, proxy /api to the backend on localhost.
     // Inside Docker, Nginx handles this proxy instead.
     proxy: {
-      '/api': {
+      '/v1': {
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
