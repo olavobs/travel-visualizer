@@ -30,7 +30,8 @@ export default function AirportInput({ value, onChange, placeholder, autoFocus }
   const handleChange = (e) => {
     const val = e.target.value.toUpperCase().slice(0, 3);
     setQuery(val);
-    onChange('');
+    const exact = AIRPORTS.find(a => a.code === val);
+    onChange(exact ? exact.code : '');
     const hits = search(val);
     setResults(hits);
     setOpen(hits.length > 0);
